@@ -1,9 +1,15 @@
 package crypto
 
 import (
+	"crypto"
 	"crypto/rsa"
+	"crypto/sha256"
 	"crypto/x509"
 	"encoding/pem"
+	"errors"
+	"fmt"
+
+	"github.com/fiskaly/coding-challenges/signing-service-challenge/domain"
 )
 
 // RSAKeyPair is a DTO that holds RSA private and public keys.
@@ -51,4 +57,25 @@ func (m *RSAMarshaler) Unmarshal(privateKeyBytes []byte) (*RSAKeyPair, error) {
 		Private: privateKey,
 		Public:  &privateKey.PublicKey,
 	}, nil
+}
+
+type RSAAlgorithm struct{}
+
+func (d RSAAlgorithm) CreateKeyPair() (domain.KeyPair, error) {
+	rsaGenerator := RSAGenerator{}
+	keyPair, err := rsaGenerator.Generate()
+	return *keyPair, err
+}
+
+func (d RSAAlgorithm) SignData(data string, keyPair domain.KeyPair) ([]byte, error) {
+	rsaKeyPair, ok := keyPair.(RSAKeyPair)
+	if !ok {
+		return nil, errors.New("Wrong key pair type")
+	}
+	hashedMessage := sha256.Sum256([]byte(data))
+	signature, err := rsa.SignPKCS1v15(nil, rsaKeyPair.Private, crypto.SHA256, hashedMessage[:])
+	if err != nil {
+		return nil, fmt.Errorf("Error signing message: %w", err)
+	}
+	return signature, nil
 }
