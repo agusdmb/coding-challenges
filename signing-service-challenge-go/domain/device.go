@@ -17,6 +17,8 @@ type KeyPair interface{}
 type Algorithm[T KeyPair] interface {
 	CreateKeyPair() (T, error)
 	SignData(data string, keyPair T) ([]byte, error)
+	Marshal(KeyPair T) ([]byte, []byte, error)
+	Unmarshal(privateKeyBytes []byte) (T, error)
 }
 
 // The signature service can manage multiple signature devices. Such a device

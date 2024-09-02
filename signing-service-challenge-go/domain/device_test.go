@@ -54,6 +54,18 @@ func (d dummyAlgorithm) SignData(data string, keyPair KeyPair) ([]byte, error) {
 	return []byte(data), nil
 }
 
+func (d dummyAlgorithm) Marshal(KeyPair KeyPair) ([]byte, []byte, error) {
+	return []byte("private key"), []byte("public key"), nil
+}
+
+func (d dummyAlgorithm) Unmarshal(privateKeyBytes []byte) (KeyPair, error) {
+	privateKey := string(privateKeyBytes)
+	if privateKey != "private key" {
+		return "", errors.New("Invalid key")
+	}
+	return "the key", nil
+}
+
 func TestNewSignatureService(t *testing.T) {
 	t.Run("Empty algorithms", func(t *testing.T) {
 		emptyAlgorithms := make(map[string]Algorithm[KeyPair])

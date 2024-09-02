@@ -15,6 +15,7 @@ const (
 func getSignatureService() (*domain.SignatureService, error) {
 	algorithms := map[string]domain.Algorithm[domain.KeyPair]{
 		"RSA": crypto.RSAAlgorithm{},
+		"ECC": crypto.ECCAlgorithm{},
 	}
 
 	return domain.NewSignatureService(algorithms)
