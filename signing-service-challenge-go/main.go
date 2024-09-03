@@ -6,6 +6,7 @@ import (
 	"github.com/fiskaly/coding-challenges/signing-service-challenge/api"
 	"github.com/fiskaly/coding-challenges/signing-service-challenge/crypto"
 	"github.com/fiskaly/coding-challenges/signing-service-challenge/domain"
+	"github.com/fiskaly/coding-challenges/signing-service-challenge/persistence"
 )
 
 const (
@@ -18,7 +19,9 @@ func getSignatureService() (*domain.SignatureService, error) {
 		"ECC": crypto.ECCAlgorithm{},
 	}
 
-	return domain.NewSignatureService(algorithms)
+	inMemoryRepository := persistence.NewInMemoryRepository()
+
+	return domain.NewSignatureService(algorithms, inMemoryRepository)
 }
 
 func main() {

@@ -111,7 +111,12 @@ func (s *Server) ListDevices(response http.ResponseWriter, request *http.Request
 		return
 	}
 
-	devices := s.signatureService.GetDevices()
+	devices, err := s.signatureService.GetDevices()
+	if err != nil {
+		log.Printf("Failed to get devices: %v", err)
+		WriteErrorResponse(response, http.StatusInternalServerError, []string{"Failed to retrieve devices"})
+		return
+	}
 
 	respData := make([]ListDevicesResponse, 0)
 	for _, device := range devices {
