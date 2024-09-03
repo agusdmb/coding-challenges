@@ -21,20 +21,20 @@ type Algorithm[T KeyPair] interface {
 	Unmarshal(privateKeyBytes []byte) (T, error)
 }
 
-type StoredDevice struct {
-	Id                  uuid.UUID
-	Algorithm           string
-	Label               string
-	SignatureCounter    int
-	LastSignatureBase64 string
-	PrivateKeyBytes     []byte
-	PublicKeyBytes      []byte
-}
-
 type Repository interface {
 	SaveDevice(device *StoredDevice) error
 	GetDevice(id uuid.UUID) (*StoredDevice, error)
 	GetDevices() ([]*StoredDevice, error)
+}
+
+func NewSignatureService(algorithms map[string]Algorithm[KeyPair], repository Repository) (*SignatureService, error) {
+	if len(algorithms) == 0 {
+		return nil, errors.New("algorithms cannot be empty")
+	}
+	return &SignatureService{
+		respository: repository,
+		algorithms:  algorithms,
+	}, nil
 }
 
 // The signature service can manage multiple signature devices. Such a device
@@ -46,16 +46,6 @@ type SignatureService struct {
 	respository Repository
 	algorithms  map[string]Algorithm[KeyPair]
 	mutex       sync.Mutex
-}
-
-func NewSignatureService(algorithms map[string]Algorithm[KeyPair], repository Repository) (*SignatureService, error) {
-	if len(algorithms) == 0 {
-		return nil, errors.New("algorithms cannot be empty")
-	}
-	return &SignatureService{
-		respository: repository,
-		algorithms:  algorithms,
-	}, nil
 }
 
 // When creating the signature device, the client of the API has to choose the
@@ -105,73 +95,9 @@ func (s *SignatureService) SaveDevice(device *SignatureDevice) error {
 	return nil
 }
 
-func (s *SignatureService) getDevice(id uuid.UUID) (*SignatureDevice, error) {
-	storedDevice, err := s.respository.GetDevice(id)
-	if err != nil {
-		return nil, fmt.Errorf("Could not get device: %w", err)
-	}
-
-	device, err := s.unmarshalDevice(storedDevice)
-	if err != nil {
-		return nil, fmt.Errorf("Could not unmarshal device: %w", err)
-	}
-
-	return device, nil
-}
-
-func (s *SignatureService) marshalDevice(device *SignatureDevice) (*StoredDevice, error) {
-	publicKeyBytes, privateKeyBytes, err := s.marshal(device)
-	if err != nil {
-		return nil, err
-	}
-	storedDevice := StoredDevice{
-		Id:                  device.id,
-		Algorithm:           device.algorithm,
-		Label:               device.label,
-		SignatureCounter:    device.signatureCounter,
-		LastSignatureBase64: device.lastSignatureBase64,
-		PublicKeyBytes:      publicKeyBytes,
-		PrivateKeyBytes:     privateKeyBytes,
-	}
-	return &storedDevice, nil
-}
-
-func (s *SignatureService) unmarshalDevice(storedDevice *StoredDevice) (*SignatureDevice, error) {
-	keyPair, err := s.unmarshal(storedDevice)
-	if err != nil {
-		return nil, err
-	}
-
-	device := SignatureDevice{
-		id:                  storedDevice.Id,
-		algorithm:           storedDevice.Algorithm,
-		keyPair:             keyPair,
-		label:               storedDevice.Label,
-		signatureCounter:    storedDevice.SignatureCounter,
-		lastSignatureBase64: storedDevice.LastSignatureBase64,
-	}
-	return &device, nil
-}
-
-func (s *SignatureService) marshal(device *SignatureDevice) ([]byte, []byte, error) {
-	algorithm, ok := s.algorithms[device.algorithm]
-	if !ok {
-		return nil, nil, fmt.Errorf("Algorithm %s not found", device.algorithm)
-	}
-
-	return algorithm.Marshal(device.keyPair)
-}
-
-func (s *SignatureService) unmarshal(storedDevice *StoredDevice) (KeyPair, error) {
-	algorithm, ok := s.algorithms[storedDevice.Algorithm]
-	if !ok {
-		return nil, fmt.Errorf("Algorithm %s not found", storedDevice.Algorithm)
-	}
-
-	return algorithm.Unmarshal(storedDevice.PrivateKeyBytes)
-}
-
 func (s *SignatureService) SignData(device_id uuid.UUID, message string) (string, string, error) {
+	// TODO: This mutex can be farther improve to avoid locking for all devices
+	// at the same time
 	s.mutex.Lock()
 	defer s.mutex.Unlock()
 
@@ -200,13 +126,6 @@ func (s *SignatureService) SignData(device_id uuid.UUID, message string) (string
 	return signedDataBase64, secureData, nil
 }
 
-type DeviceInfo struct {
-	ID        uuid.UUID
-	Label     string
-	Algorithm string
-	Counter   int
-}
-
 func (s *SignatureService) GetDevices() ([]DeviceInfo, error) {
 	storedDevices, err := s.respository.GetDevices()
 	if err != nil {
@@ -223,19 +142,6 @@ func (s *SignatureService) GetDevices() ([]DeviceInfo, error) {
 		})
 	}
 	return devices, nil
-}
-
-// The signature device should also have a label that can be used to display it
-// in the UI and a signature_counter that tracks how many signatures have been
-// created with this device. The label is provided by the user. The
-// signature_counter shall only be modified internally.
-type SignatureDevice struct {
-	id                  uuid.UUID
-	algorithm           string
-	keyPair             KeyPair
-	label               string
-	signatureCounter    int
-	lastSignatureBase64 string
 }
 
 // The resulting string (secured_data_to_be_signed) should follow this format:
